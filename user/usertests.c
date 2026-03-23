@@ -2337,13 +2337,10 @@ bigargtest(char *s)
   close(fd);
 }
 
-// what happens when the file system runs out of blocks?
-// answer: balloc panics, so this test is not useful.
 void
 fsfull()
 {
   int nfiles;
-  int fsblocks = 0;
 
   printf("fsfull test\n");
 
@@ -2367,7 +2364,6 @@ fsfull()
       if(cc < BSIZE)
         break;
       total += cc;
-      fsblocks++;
     }
     printf("wrote %d bytes\n", total);
     close(fd);

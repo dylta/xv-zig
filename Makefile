@@ -1,5 +1,20 @@
 K=kernel
 U=user
+HOST_CC ?= gcc
+TOOLCHAIN ?= gnu
+
+ifeq ($(TOOLCHAIN),zig)
+ZIG ?= zig
+ZIG_TARGET ?= riscv64-freestanding-none
+ZIG_MCPU ?= generic_rv64+64bit+m+a+f+d+c
+FORKTEST_LDFLAGS = --image-base=0
+USER_LDFLAGS = --no-rosegment
+USER_POST_LINK = $(OBJCOPY) --strip-all
+else
+FORKTEST_LDFLAGS =
+USER_LDFLAGS =
+USER_POST_LINK = @true
+endif
 
 OBJS = \
   $K/entry.o \
@@ -47,7 +62,7 @@ TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' 
 	elif riscv64-unknown-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
 	then echo 'riscv64-unknown-linux-gnu-'; \
 	else echo "***" 1>&2; \
-	echo "*** Error: Couldn't find a riscv64 version of GCC/binutils." 1>&2; \
+	echo "*** Error: Couldn't find a riscv64 objdump/binutils toolchain." 1>&2; \
 	echo "*** To turn off this error, run 'gmake TOOLPREFIX= ...'." 1>&2; \
 	echo "***" 1>&2; exit 1; fi)
 endif
@@ -55,9 +70,15 @@ endif
 QEMU = qemu-system-riscv64
 MIN_QEMU_VERSION = 7.2
 
+ifeq ($(TOOLCHAIN),zig)
+CC = $(ZIG) cc -target $(ZIG_TARGET) -mcpu=$(ZIG_MCPU)
+AS = $(CC)
+LD = ld.lld -m elf64lriscv
+else
 CC = $(TOOLPREFIX)gcc
 AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
+endif
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
@@ -74,6 +95,11 @@ CFLAGS += -fno-builtin-free
 CFLAGS += -fno-builtin-memcpy -Wno-main
 CFLAGS += -fno-builtin-printf -fno-builtin-fprintf -fno-builtin-vprintf
 CFLAGS += -I.
+ifeq ($(TOOLCHAIN),zig)
+CFLAGS := $(filter-out -march=rv64gc,$(CFLAGS))
+CFLAGS += -fno-sanitize=undefined
+CFLAGS += -fno-stack-protector
+else
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 
 # Disable PIE when possible (for Ubuntu 16.10 toolchain)
@@ -82,6 +108,7 @@ CFLAGS += -fno-pie -no-pie
 endif
 ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]nopie'),)
 CFLAGS += -fno-pie -nopie
+endif
 endif
 
 LDFLAGS = -z max-page-size=4096
@@ -92,7 +119,7 @@ $K/kernel: $(OBJS) $K/kernel.ld
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 
 $K/%.o: $K/%.S
-	$(CC) -march=rv64gc -g -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 tags: $(OBJS)
 	etags kernel/*.S kernel/*.c
@@ -100,9 +127,10 @@ tags: $(OBJS)
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
 _%: %.o $(ULIB) $U/user.ld
-	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $< $(ULIB)
+	$(LD) $(LDFLAGS) $(USER_LDFLAGS) -e start -T $U/user.ld -o $@ $< $(ULIB)
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
+	$(USER_POST_LINK) $@
 
 $U/usys.S : $U/usys.pl
 	perl $U/usys.pl > $U/usys.S
@@ -113,11 +141,12 @@ $U/usys.o : $U/usys.S
 $U/_forktest: $U/forktest.o $(ULIB)
 	# forktest has less library code linked in - needs to be small
 	# in order to be able to max out the proc table.
-	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $U/_forktest $U/forktest.o $U/ulib.o $U/usys.o
+	$(LD) $(LDFLAGS) $(USER_LDFLAGS) $(FORKTEST_LDFLAGS) -N -e main -Ttext 0 -o $U/_forktest $U/forktest.o $U/ulib.o $U/usys.o
 	$(OBJDUMP) -S $U/_forktest > $U/forktest.asm
+	$(USER_POST_LINK) $U/_forktest
 
 mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
-	gcc -Wno-unknown-attributes -I. -o mkfs/mkfs mkfs/mkfs.c
+	$(HOST_CC) -Wno-unknown-attributes -I. -o mkfs/mkfs mkfs/mkfs.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More
