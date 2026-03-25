@@ -132,6 +132,15 @@ _%: %.o $(ULIB) $U/user.ld
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
 	$(USER_POST_LINK) $@
 
+ifeq ($(TOOLCHAIN),zig)
+USER_ZIGFLAGS = -target $(ZIG_TARGET) -mcpu=$(ZIG_MCPU) -mcmodel=medany -O ReleaseSmall -fno-stack-protector -I.
+
+$U/%.o: $U/%.zig $(wildcard $K/*.h) $(wildcard $U/*.h)
+	$(ZIG) build-obj $(USER_ZIGFLAGS) -femit-bin=$@ $<
+endif
+
+ZIG_UPROGS = hello
+
 $U/usys.S : $U/usys.pl
 	perl $U/usys.pl > $U/usys.S
 
@@ -174,6 +183,10 @@ UPROGS=\
 	$U/_logstress\
 	$U/_forphan\
 	$U/_dorphan\
+
+ifeq ($(TOOLCHAIN),zig)
+UPROGS += $(addprefix $U/_,$(ZIG_UPROGS))
+endif
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

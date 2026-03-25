@@ -16,3 +16,10 @@ kernel/kernel
 user/usys.S
 .gdbinit
 TAGS
+.zig-cache/
+.zig-global-cache/
+zig-out/
+compile_commands.json
+generate_compile_commands.py
+.clangd
+build.zig
