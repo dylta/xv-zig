@@ -45,11 +45,6 @@ OBJS = \
   $K/plic.o \
   $K/virtio_disk.o
 
-# riscv64-unknown-elf- or riscv64-linux-gnu-
-# perhaps in /opt/riscv/bin
-#TOOLPREFIX = 
-
-# Try to infer the correct TOOLPREFIX if not set
 ifndef TOOLPREFIX
 TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
 	then echo 'riscv64-unknown-elf-'; \
@@ -120,6 +115,13 @@ $K/kernel: $(OBJS) $K/kernel.ld
 
 $K/%.o: $K/%.S
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+ifeq ($(TOOLCHAIN),zig)
+KERNEL_ZIGFLAGS = -target $(ZIG_TARGET) -mcpu=$(ZIG_MCPU) -mcmodel=medany -O ReleaseSmall -fno-stack-protector -Ikernel -I.
+
+$K/start.o: $K/start.zig $(wildcard $K/*.h)
+	$(ZIG) build-obj $(KERNEL_ZIGFLAGS) -femit-bin=$@ $<
+endif
 
 tags: $(OBJS)
 	etags kernel/*.S kernel/*.c
