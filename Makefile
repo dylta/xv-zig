@@ -116,6 +116,13 @@ $K/kernel: $(OBJS) $K/kernel.ld
 $K/%.o: $K/%.S
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+ifeq ($(TOOLCHAIN),zig)
+KERNEL_ZIGFLAGS = -target $(ZIG_TARGET) -mcpu=$(ZIG_MCPU) -mcmodel=medany -O ReleaseSmall -fno-stack-protector -Ikernel -I.
+
+$K/start.o: $K/start.zig $(wildcard $K/*.h)
+	$(ZIG) build-obj $(KERNEL_ZIGFLAGS) -femit-bin=$@ $<
+endif
+
 tags: $(OBJS)
 	etags kernel/*.S kernel/*.c
 
