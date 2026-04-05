@@ -121,6 +121,13 @@ KERNEL_ZIGFLAGS = -target $(ZIG_TARGET) -mcpu=$(ZIG_MCPU) -mcmodel=medany -O Rel
 
 $K/start.o: $K/start.zig $(wildcard $K/*.h)
 	$(ZIG) build-obj $(KERNEL_ZIGFLAGS) -femit-bin=$@ $<
+
+$K/kalloc.o: $K/kalloc.zig $K/memlayout.zig $K/param.zig $K/riscv.zig $K/string.zig $(wildcard $K/*.h)
+	$(ZIG) build-obj $(KERNEL_ZIGFLAGS) -femit-bin=$@ $<
+
+$K/main.o: $K/main.zig $(wildcard $K/*.h)
+	$(ZIG) build-obj $(KERNEL_ZIGFLAGS) -femit-bin=$@ $<
+
 endif
 
 tags: $(OBJS)

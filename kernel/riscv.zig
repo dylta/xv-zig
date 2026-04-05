@@ -204,7 +204,7 @@ pub inline fn w_pmpaddr0(x: u64) void {
 // use riscv's sv39 page table scheme.
 pub const SATP_SV39 = 8 << 60;
 
-pub inline fn make_satp(pagetable: u64) u64 {
+pub inline fn make_satp(pagetable: Pagetable_t) u64 {
     return SATP_SV39 | (pagetable >> 12);
 }
 
@@ -307,18 +307,18 @@ pub inline fn sfence_vma() void {
     asm volatile ("sfence.vma zero, zero");
 }
 
-pub const pte_t = u64;
-pub const pagetable_t = [*]pte_t; // 512 PTEs
+pub const Pte_t = u64;
+pub const Pagetable_t = *align(PAGESIZE) [512]Pte_t; // 512 PTEs
 
-pub const PAGE_SIZE = 4096; // bytes per page
-pub const PAGE_SHIFT = 12; // bits of offset within a page
+pub const PAGESIZE: u64 = 4096; // bytes per page
+pub const PAGESHIFT: u64 = 12; // bits of offset within a page
 
 pub inline fn pageRoundUp(sz: u64) u64 {
-    return (sz + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    return (sz + PAGESIZE - 1) & ~@as(u64, PAGESIZE - 1);
 }
 
 pub inline fn pageRoundDown(a: u64) u64 {
-    return a & ~(PAGE_SIZE - 1);
+    return a & ~@as(u64, PAGESIZE - 1);
 }
 
 pub const PTE_V = 1 << 0; // valid
@@ -332,11 +332,11 @@ pub inline fn pa2pte(pa: u64) u64 {
     return (pa >> 12) << 10;
 }
 
-pub inline fn pte2pa(pte: u64) u64 {
+pub inline fn pte2pa(pte: Pte_t) Pte_t {
     return (pte >> 10) << 12;
 }
 
-pub inline fn pte_flags(pte: u64) u64 {
+pub inline fn pte_flags(pte: Pte_t) Pte_t {
     return pte & 0x3FF;
 }
 
@@ -344,7 +344,7 @@ pub inline fn pte_flags(pte: u64) u64 {
 pub const PXMASK = 0x1FF; // 9 bits
 
 pub inline fn pxshift(level: u64) u64 {
-    return PAGE_SHIFT + (9 * level);
+    return PAGESHIFT + (9 * level);
 }
 
 pub inline fn px(level: u64, va: u64) u64 {
@@ -355,4 +355,4 @@ pub inline fn px(level: u64, va: u64) u64 {
 // MAXVA is actually one bit less than the max allowed by
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
-pub const MAXVA = 1 << (9 + 9 + 9 + 12 - 1);
+pub const MAXVA: u64 = 1 << (9 + 9 + 9 + 12 - 1);
